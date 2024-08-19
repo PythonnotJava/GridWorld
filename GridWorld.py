@@ -103,8 +103,13 @@ class Scene(QGraphicsScene):
         self.buildScene()
         self.update_walker_position()
 
-    def reset(self) -> None:
+    def reset(self, setNewGrids : bool = False, num_obstacles : int = 0, num_penalty : int = 0, num_endpoints : int = 0) -> None:
+        # setNewGrids设置新的、同形状的二维数组
         self.walker.reset(self.start_point[0], self.start_point[1], self.walker.tolerance_backup)
+        if setNewGrids:
+            self.grids, self.start_point = generate_grid(self.column, self.row, num_obstacles, num_penalty, num_endpoints)
+            self.walker.x = self.start_point[0]
+            self.walker.y = self.start_point[1]
         self.buildScene()
         self.update_walker_position()
 
@@ -148,7 +153,6 @@ class InfoDlg(QDialog):
         self.close()
 
     def setUI(self) -> None:
-        self.setStyleSheet('background-color : skyblue;font-size : 24px;border-radius : 10px;border : 2px solid black')
         self.btnOk.setText('Ok')
         self.btnOk.clicked.connect(self.okfunc)
         self.btnCancel.setText('No')
@@ -162,6 +166,7 @@ class InfoDlg(QDialog):
         vlay.addWidget(self.label)
         vlay.addLayout(hlay)
         self.setLayout(vlay)
+        self.setObjectName('InfoDlg')
 
 class InfoBoard(QWidget):
     def __init__(self, tolerance : int):
@@ -226,7 +231,19 @@ class AppCore(QMainWindow):
 
     receiveMsg = pyqtSignal()
 
-    def __init__(self, width: int, height: int, grids: List[List[int]], start_point: List[int], tolerance: int):
+    def __init__(
+            self,
+            width: int,
+            height: int,
+            grids: List[List[int]],
+            start_point: List[int],
+            tolerance: int,
+            *,
+            setNewGrids : bool = False,
+            num_obstacles : int = 0,
+            num_penalty : int = 0,
+            num_endpoints : int = 0
+    ):
         super().__init__()
         self.setWindowTitle('Grid Walker For RL')
         self.walker = Walker(start_point[0], start_point[1], tolerance)
@@ -236,9 +253,17 @@ class AppCore(QMainWindow):
         self.infoBoard = InfoBoard(tolerance)
         self.splitter1 = QSplitter()
         self.splitter2 = QSplitter()
+
+        self.setNewGrids = setNewGrids
+        self.num_obstacles = num_obstacles
+        self.num_penalty = num_penalty
+        self.num_endpoints = num_endpoints
         self.setUI()
 
     def setUI(self):
+        self.view.setObjectName('view')
+        self.msgBox.setObjectName('msgBox')
+
         lay = QVBoxLayout()
         lay.addWidget(self.splitter1)
         self.setLayout(lay)
@@ -252,15 +277,15 @@ class AppCore(QMainWindow):
         self.splitter2.setOrientation(Qt.Vertical)
         self.setCentralWidget(self.splitter2)
 
-        self.msgBox.setEnabled(False)
         self.msgBox.setPlaceholderText('等待运行中……')
+        self.msgBox.setReadOnly(True)
 
         self.walker.sendMsg.connect(self.handle_msg)
         self.walker.stepSignal.connect(self.infoBoard.step_record)
         self.walker.toleUseSignal.connect(self.infoBoard.tole_record)
 
     def reset(self):
-        self.scene.reset()
+        self.scene.reset(self.setNewGrids, self.num_obstacles, self.num_penalty, self.num_endpoints)
         self.infoBoard.reset(self.walker.tolerance_backup)
 
     def handle_msg(self, msg : str):
@@ -277,13 +302,35 @@ class AppCore(QMainWindow):
         else:
             self.msgBox.appendPlainText(msg)
 
-def main(grids : List[List[int]], start_point : List[int], width : int = 1000, height : int = 800, tolerance : int = 20):
+def main(
+        grids : List[List[int]],
+        start_point : List[int],
+        width : int = 1000,
+        height : int = 800,
+        tolerance : int = 20,
+        *,
+        setNewGrids: bool = False,
+        num_obstacles: int = 0,
+        num_penalty: int = 0,
+        num_endpoints: int = 0
+):
     app = QApplication(sys.argv)
-    ui = AppCore(width=width, height=height, grids=grids, start_point=start_point, tolerance=tolerance)
+    app.setStyleSheet(open('style.css', 'r').read())
+    ui = AppCore(
+        width=width,
+        height=height,
+        grids=grids,
+        start_point=start_point,
+        tolerance=tolerance,
+        setNewGrids=setNewGrids,
+        num_endpoints=num_endpoints,
+        num_obstacles=num_obstacles,
+        num_penalty=num_penalty
+    )
     ui.show()
     sys.exit(app.exec_())
 
 if __name__ == '__main__':
     Grids = generate_grid(15, 15, 40, 20, 2)
-    main(Grids[0], Grids[1])
+    main(Grids[0], Grids[1], setNewGrids=False, num_obstacles=40, num_penalty=20, num_endpoints=2)
 

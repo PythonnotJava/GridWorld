@@ -1,0 +1,28 @@
+#InfoDlg {
+    background-color : skyblue;
+    font-size : 24px;
+    border-radius : 10px;
+    border : 2px solid black
+}
+
+QLabel {
+    background-color: lightblue;
+    border: 1px solid black;
+    border-radius: 10px;
+}
+
+QLCDNumber{
+    border-radius : 10px;
+    border : 2px solid black
+}
+
+#msgBox{
+    background-color: #f0f0f0;
+    border: 2px solid #b3b3b3;
+    border-radius: 4px;
+    padding-left :20px;
+    box-shadow: inset 10px 10px 10px rgba(0, 0, 0, 0.3);
+    font-weight: bolder ;
+    font-size: 18px;
+    color: darkblue;
+}
