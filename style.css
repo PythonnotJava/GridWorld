@@ -26,3 +26,20 @@ QLCDNumber{
     font-size: 18px;
     color: darkblue;
 }
+
+QPushButton {
+    border: 2px solid #000fff;
+    border-radius: 10px;
+    min-height: 40px;
+    background-color: skyblue;
+}
+
+QPushButton:pressed{
+    padding-left: 5px;
+    padding-right: 5px;
+    font-size: 12px;
+}
+
+QPushButton:disabled{
+    background-color: grey;
+}

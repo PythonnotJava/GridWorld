@@ -1,83 +1,23 @@
-import sys
-from typing import Optional, List, Callable
+"""
+问题源：
+有一个网格事件，包含五种格子。
+    - 白色可行区（id为0，奖励为0）
+    - 黄色惩罚区（id为1，惩罚为1）
+    - 灰色禁行区（id为2，奖励为0）
+    - 蓝色为起点（id为3，奖励为0）
+    - 黑色为终点（id为4，奖励为1）
+一个单元从起点出发，只能上下左右走，碰边缘壁和禁行区也算入步数，有一定的惩罚容忍值。请问，如何求解行走的最优策略
+"""
 
-from PyQt5.QtGui import QKeyEvent
-from PyQt5.QtCore import pyqtSignal, QObject, QSize, QRectF, Qt
-from PyQt5.QtWidgets import (
-    QSplitter, QWidget, QLabel, QLCDNumber, QGraphicsRectItem,
-    QVBoxLayout, QHBoxLayout, QDialog, QPushButton, QMainWindow,
-    QPlainTextEdit, QGraphicsScene, QApplication, QGraphicsView
-)
+import sys
+from typing import *
+from PyQt5.QtCore import *
+from PyQt5.QtWidgets import *
+from PyQt5.QtGui import *
+from PyQt5.QtCore import Qt
 
 from CellGens import generate_grid
-class Walker(QObject):
-    sendMsg = pyqtSignal(str)
-    stepSignal = pyqtSignal()
-    toleUseSignal = pyqtSignal()
-    def __init__(self, x : int, y : int, tolerance : int):
-        # self.stepLimited = stepLimited  这个可以用来拓展，我是这么想的：比如让移动有次数限制
-        super().__init__()
-        self.x = x
-        self.y = y
-        self.tolerance = tolerance
-        self.tolerance_backup = tolerance
-
-    def reset(self, x: int, y: int, tolerance: int):
-        self.x = x
-        self.y = y
-        self.tolerance = tolerance
-        self.tolerance_backup = tolerance
-
-    # 检测是否会被惩罚
-    def _judge_penalty(self, grids: list[list[int]], x : int, y : int) -> None:
-        if grids[x][y] == 2:
-            self.tolerance -= 1
-            self.sendMsg.emit('被惩罚一次！')
-            self.toleUseSignal.emit()
-
-    # 检测是否不是禁行区
-    def _judge_not_forbidden_area(self, grids: list[list[int]], x : int, y : int) -> bool:
-        if grids[x][y] == 1:
-            self.sendMsg.emit("禁止区域!")
-            return False
-        else:
-            return True
-
-    # 检测是否到达终点
-    def _judge_is_end(self, grids: list[list[int]], x : int, y : int) -> bool:
-        if grids[x][y] == 4:
-            self.sendMsg.emit("suc")
-            return True
-        return False
-
-    # 检测是否还能接受惩罚项
-    def _judge_acceptable_punishment(self) -> bool:
-        if self.tolerance < 0:
-            self.sendMsg.emit("fail")
-            return False
-        else:
-            return True
-
-
-    def move(self, dx : int, dy : int, row : int, column : int, grids : List[List[int]], where : str) -> None:
-        new_x = self.x + dx
-        new_y = self.y + dy
-
-        # 边界检查
-        if 0 <= new_x < row and 0 <= new_y < column:
-            if self._judge_not_forbidden_area(grids, new_x, new_y):
-                self.x = new_x
-                self.y = new_y
-                self._judge_penalty(grids, new_x, new_y)
-                if self._judge_acceptable_punishment() and not self._judge_is_end(grids, new_x, new_y):
-                    where : str
-                    self.sendMsg.emit(f'成功往 [{where}] 走了一步')
-                    self.stepSignal.emit()
-        else:
-            self.sendMsg.emit('已到达边界！')
-
-    # 强化学习接口，用于训练walker行走，还在开发中
-    def policy(self): ...
+from Walker import CellSpeed, Walker, ActionsDict
 
 class Scene(QGraphicsScene):
     CellColors = {
@@ -127,16 +67,20 @@ class Scene(QGraphicsScene):
     def update_walker_position(self) -> None:
         self.walkerItem.setPos(self.walker.y * self.cellWidth, self.walker.x * self.cellHeight)
 
-    def keyPressEvent(self, event: QKeyEvent) -> None:
-        if event.key() == Qt.Key_Up:
-            self.walker.move(-1, 0, self.row, self.column, self.grids, '👆')
-        elif event.key() == Qt.Key_Down:
-            self.walker.move(1, 0, self.row, self.column, self.grids, '👇')
-        elif event.key() == Qt.Key_Left:
-            self.walker.move(0, -1, self.row, self.column, self.grids, '👈')
-        elif event.key() == Qt.Key_Right:
-            self.walker.move(0, 1, self.row, self.column, self.grids, '👉')
-        self.update_walker_position()
+    def keyPressEvent(self, event: QKeyEvent, *args) -> None:
+        eventKeys = {
+            Qt.Key_Up : ActionsDict[0],
+            Qt.Key_Down : ActionsDict[1],
+            Qt.Key_Left : ActionsDict[2],
+            Qt.Key_Right : ActionsDict[3]
+        }
+        deltas, where = eventKeys[event.key()]
+        self.walker.move(deltas[0], deltas[1], self.row, self.column, self.grids, where, self.update_walker_position)
+        super().keyPressEvent(event, *args)
+
+    # 自动行走时，场景中更新行为
+    def autoMove(self, actions : Iterator[int]) -> None:
+        self.walker.autoMove(actions, self.row, self.column, self.grids, self.update_walker_position)
 
 class InfoDlg(QDialog):
     def __init__(self, reset_func : Callable, msg : str, cancel_func : Optional[Callable] = None):
@@ -169,6 +113,7 @@ class InfoDlg(QDialog):
         self.setObjectName('InfoDlg')
 
 class InfoBoard(QWidget):
+
     def __init__(self, tolerance : int):
         super().__init__()
         self.step = 0
@@ -181,12 +126,16 @@ class InfoBoard(QWidget):
         self.toleCountLCD = QLCDNumber()
         self.toleLeftLCD = QLCDNumber()
 
+        self.customPolicyOriginBtn = QPushButton('调用原生策略自动寻路')
+        self.customPolicyInsertBtn = QPushButton('插入策略代码自动寻路')
+
         self.setUI()
 
     def setUI(self) -> None:
         hlay1 = QHBoxLayout()
         hlay2 = QHBoxLayout()
         hlay3 = QHBoxLayout()
+        hlay4 = QHBoxLayout()
         vlay = QVBoxLayout()
 
         hlay1.addWidget(self.stepsRecord)
@@ -197,10 +146,16 @@ class InfoBoard(QWidget):
 
         hlay3.addWidget(self.toleLeftRecord)
         hlay3.addWidget(self.toleLeftLCD)
+
+        hlay4.addWidget(self.customPolicyOriginBtn)
+        hlay4.addWidget(self.customPolicyInsertBtn)
+
         vlay.addLayout(hlay1)
         vlay.addLayout(hlay2)
         vlay.addLayout(hlay3)
+        vlay.addLayout(hlay4)
         self.setLayout(vlay)
+        vlay.setContentsMargins(50, 10, 50, int(self.height() * 0.8))
 
         self.stepLCD.display(self.step)
         self.toleLeftLCD.display(self.toleLeft)
@@ -283,6 +238,8 @@ class AppCore(QMainWindow):
         self.walker.sendMsg.connect(self.handle_msg)
         self.walker.stepSignal.connect(self.infoBoard.step_record)
         self.walker.toleUseSignal.connect(self.infoBoard.tole_record)
+        self.walker.canPressedAutoMoveBtn.connect(self.__canPressedAutoMoveBtn)
+        self.infoBoard.customPolicyOriginBtn.clicked.connect(lambda : self.autoMove(iter([1, 3, 1, 3, 3, 1, 1])))
 
     def reset(self):
         self.scene.reset(self.setNewGrids, self.num_obstacles, self.num_penalty, self.num_endpoints)
@@ -290,17 +247,22 @@ class AppCore(QMainWindow):
 
     def handle_msg(self, msg : str):
         if msg == "suc":
+            self.msgBox.appendPlainText('此轮成功！')
             dlg = InfoDlg(self.reset, "到达终点，获胜！再来一局？")
             dlg.exec_()
-            self.msgBox.clear()
-            self.msgBox.setPlaceholderText('等待运行中……')
         elif msg == "fail":
+            self.msgBox.appendPlainText('此轮失败！')
             dlg = InfoDlg(self.reset, '不在规定要求内，要不重新来一局？')
             dlg.exec_()
-            self.msgBox.clear()
-            self.msgBox.setPlaceholderText('等待运行中……')
         else:
             self.msgBox.appendPlainText(msg)
+
+    def __canPressedAutoMoveBtn(self, can : bool):
+        self.infoBoard.customPolicyOriginBtn.setEnabled(can)
+        self.infoBoard.customPolicyInsertBtn.setEnabled(can)
+        print(can)
+
+    def autoMove(self, actions : Iterator): self.scene.autoMove(actions)
 
 def main(
         grids : List[List[int]],
@@ -331,6 +293,23 @@ def main(
     sys.exit(app.exec_())
 
 if __name__ == '__main__':
-    Grids = generate_grid(15, 15, 40, 20, 2)
-    main(Grids[0], Grids[1], setNewGrids=False, num_obstacles=40, num_penalty=20, num_endpoints=2)
+    main([
+    [0, 3, 1, 2, 2],
+    [2, 0, 0, 1, 2],
+    [1, 2, 2, 0, 0],
+    [0, 0, 0, 1, 2],
+    [0, 1, 0, 0, 4]
+  ], [0, 1])
+
+# if __name__ == '__main__':
+#     import json
+#     maps = json.load(open('maps.json'))
+#     start = maps['start']
+#     grids = maps['grids']
+#     main(grids, start, tolerance=10)
+
+
+# if __name__ == '__main__':
+#     Grids = generate_grid(15, 15, 40, 20, 2)
+#     main(Grids[0], Grids[1], setNewGrids=False, num_obstacles=40, num_penalty=20, num_endpoints=2)
 

@@ -1,6 +1,5 @@
 import random
 
-
 def generate_grid(width: int, height: int, num_obstacles: int, num_penalty: int, num_endpoints: int) -> tuple:
     """
     生成一个网格，其中包含起点、终点、障碍物、惩罚区域、可行区域。
