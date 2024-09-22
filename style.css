@@ -1,45 +1,28 @@
-#InfoDlg {
-    background-color : skyblue;
-    font-size : 24px;
-    border-radius : 10px;
-    border : 2px solid black
-}
-
-QLabel {
-    background-color: lightblue;
-    border: 1px solid black;
-    border-radius: 10px;
-}
-
-QLCDNumber{
-    border-radius : 10px;
-    border : 2px solid black
-}
-
-#msgBox{
-    background-color: #f0f0f0;
-    border: 2px solid #b3b3b3;
-    border-radius: 4px;
-    padding-left :20px;
-    box-shadow: inset 10px 10px 10px rgba(0, 0, 0, 0.3);
-    font-weight: bolder ;
-    font-size: 18px;
-    color: darkblue;
-}
-
 QPushButton {
-    border: 2px solid #000fff;
-    border-radius: 10px;
-    min-height: 40px;
-    background-color: skyblue;
+    border: 2px solid black;
+    border-radius: 5px;
+    min-height: 50px;
 }
 
 QPushButton:pressed{
     padding-left: 5px;
-    padding-right: 5px;
-    font-size: 12px;
+    padding-top: 5px;
 }
 
-QPushButton:disabled{
-    background-color: grey;
+QLCDNumber {
+    border-radius: 5px;
+    background-color: lightblue;
+}
+
+QLabel{
+    border-radius: 5px;
+    font-size: 24px;
+}
+
+QPlainTextEdit{
+    font-size: 18px;
+    color: #000fff;
+    font-weight: bold;
+    margin: 10px;
+    border-radius: 5px;
 }
