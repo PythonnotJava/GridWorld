@@ -1,4 +1,3 @@
-import json
 from typing import *
 from abc import abstractmethod
 
@@ -7,46 +6,8 @@ from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtCore import Qt
 
-"""
-规定：
-    - 区域布局是锁死的
-    - 惩罚后容忍值达到0就结束
-    - 模拟者先走再判断
-"""
-
-GlobalMapSettings = json.load(open('maps.json', 'r'))
-
-# 不同作用的单元格的颜色配置
-CellColors = {
-    0 : QColor('white'),  # 可通行
-    1 : QColor('yellow'),  # 可通行但惩罚区
-    2 : QColor('grey'),  # 禁行区
-    3 : QColor('blue'),  # 起点
-    4 : QColor('#000000'),  # 终点
-    5 : QColor('red'),  # 模拟单元
-}
-
-# 行走方向的方式，左右上下
-MoveDirections = {
-    'l' : [[0, -1], '👈'],
-    'r' : [[0, 1], '👉'],
-    'u' : [[-1, 0], '👆'],
-    'd' : [[1, 0], '👇']
-}
-
-EventKeys = {
-    Qt.Key_Up : 'u',
-    Qt.Key_Down : 'd',
-    Qt.Key_Left : 'l',
-    Qt.Key_Right : 'r'
-}
-
-# 网格世界
-Worlds = GlobalMapSettings.get('grids')
-
-Row, Column = GlobalMapSettings.get('shape')
-
-Speed = 3  # 每秒行走格子数
+from MsgBox import MsgBox
+from GlobalSetting import *
 
 # 功能更新
 class ResetMixin:
@@ -169,12 +130,23 @@ class Walker(QObject, ResetMixin):
     # 多次探路
     def autoMove(
             self,
-            paths : Sequence[Sequence[str]],
-            update_location_func : Callable,
-            break_cope_func : Callable
+            paths: List[List[str]],
+            update_location_func: Callable,
+            break_cope_func: Callable
     ) -> None:
-        for path in paths:
-            return self.autoMove(path, update_location_func, break_cope_func)
+        # 定义一个内部函数来处理每条路径
+        def process_next_path(path_index: int) -> None:
+            if path_index < len(paths):  # 检查是否还有路径
+                path = paths[path_index]
+                self.autoMoveOnce(
+                    path,
+                    update_location_func,
+                    lambda: (break_cope_func(), process_next_path(path_index + 1))  # 当路径结束时继续下一个路径
+                )
+            else:
+                self.msgSignal.emit('所有路径处理完毕！')  # 所有路径完成的消息
+
+        process_next_path(0)  # 从第一条路径开始处理
 
     # 抽象策略接口
     def autoPolicy(self, *args, **kwargs):
@@ -193,7 +165,6 @@ class Scene(QGraphicsScene, ResetMixin):
     # 重重置
     def reset(self) -> None:
         self.walker.reset()
-        self.walkerItem = self.buildScene()
         self.update_scence_by_walker()
 
     # 场景建立
@@ -287,7 +258,7 @@ class AppCore(QMainWindow, ResetMixin):
         self.scene = Scene(sceneSize, Walker(start, tolerance, step))
         self.sceneview = QGraphicsView(self.scene)
         self.scoreboard = ScoreBoard(step, tolerance)
-        self.msgshower = QPlainTextEdit()
+        self.msgshower = MsgBox()
 
         self.__setUI()
 
@@ -304,15 +275,14 @@ class AppCore(QMainWindow, ResetMixin):
         verSplitter.setOrientation(Qt.Vertical)
         horSplitter.setOrientation(Qt.Horizontal)
 
-        self.msgshower.setPlaceholderText('等待运行中……')
-        self.msgshower.setReadOnly(True)
-
         self.scene.walker.msgSignal.connect(self.accept_msg)
         self.scene.walker.stepSignal.connect(lambda : self.record_step(True))
         self.scene.walker.punishSignal.connect(lambda: self.record_step(False))
 
         # 连接自动按钮
-        self.scoreboard.customMoveBtn.clicked.connect(lambda : self.autoMove(list('drrdd')))
+        self.scoreboard.customMoveBtn.clicked.connect(lambda : self.autoMove(
+            [list('drrdd'), list('drrrdddr'), list('drdrdll')]
+        ))
 
     # 记录面板
     def record_step(self, step : bool):
@@ -379,7 +349,6 @@ def main(
     ui.setStyleSheet(open('style.css').read())
     ui.show()
     app.exec()
-
 
 if __name__ == '__main__':
     main(
