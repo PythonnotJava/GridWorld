@@ -1,4 +1,3 @@
-from typing import *
+a = {"a"  : 21, ("1", "2") : 33}
 
-print(issubclass(str, Sequence))
-print('l' * 16)
+print(a.get(('1' ,'2'), 3))
